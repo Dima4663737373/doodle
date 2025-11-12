@@ -42,22 +42,17 @@ export function LineraProvider({ children }: { children: ReactNode }) {
           throw new Error('Missing Linera env configuration');
         }
 
-        let mnemonic = localStorage.getItem('linera_mnemonic');
-        if (!mnemonic) {
-          const generated = Wallet.createRandom();
-          const phrase = generated.mnemonic?.phrase;
-          if (!phrase) throw new Error('Failed to generate mnemonic');
-          mnemonic = phrase;
-          localStorage.setItem('linera_mnemonic', mnemonic);
-        }
+        const generated = Wallet.createRandom();
+        const phrase = generated.mnemonic?.phrase;
+        if (!phrase) throw new Error('Failed to generate mnemonic');
+        localStorage.setItem('linera_mnemonic', phrase);
 
-        const signer = PrivateKey.fromMnemonic(mnemonic);
+        const signer = PrivateKey.fromMnemonic(phrase);
         const faucet = new linera.Faucet(faucetUrl);
         const owner = signer.address();
 
-        // Prefer reusing existing wallet/chain to avoid breaking host rooms
-        const wallet = state.wallet ?? await faucet.createWallet();
-        const chainId = state.chainId ?? await faucet.claimChain(wallet, owner);
+        const wallet = await faucet.createWallet();
+        const chainId = await faucet.claimChain(wallet, owner);
 
         const clientInstance = await new linera.Client(wallet, signer, false);
         const application = await clientInstance.frontend().application(applicationId);

@@ -35,9 +35,10 @@ interface GameProps {
   hostChainId: string;
   settings: GameSettings;
   onGameEnd: (players: Player[]) => void;
+  onBackToLobby: () => void;
 }
 
-export function Game({ playerName, hostChainId, settings, onGameEnd }: GameProps) {
+export function Game({ playerName, hostChainId, settings, onGameEnd, onBackToLobby }: GameProps) {
   const { client, application, chainId, ready } = useLinera();
 
   const [players, setPlayers] = useState<Player[]>([]);
@@ -65,6 +66,24 @@ export function Game({ playerName, hostChainId, settings, onGameEnd }: GameProps
   // Track previous drawer index to detect changes
   const prevDrawerIndexRef = useRef<number | null>(null);
 
+  const cleanupRoomSession = () => {
+    if (autoWordTimeoutRef.current) {
+      clearTimeout(autoWordTimeoutRef.current);
+      autoWordTimeoutRef.current = null;
+    }
+    if (autoDrawerTimeoutRef.current) {
+      clearTimeout(autoDrawerTimeoutRef.current);
+      autoDrawerTimeoutRef.current = null;
+    }
+    autoDrawerScheduleKeyRef.current = null;
+    autoDrawerFireKeyRef.current = null;
+    chooseDrawerInFlightRef.current = false;
+    prevDrawerIndexRef.current = null;
+    setShowWordSelector(false);
+    setWordOptions([]);
+    setCanvasData("");
+  };
+
   const queryGameState = async () => {
     if (!application || !ready) return;
     try {
@@ -73,6 +92,13 @@ export function Game({ playerName, hostChainId, settings, onGameEnd }: GameProps
       );
       const roomData = JSON.parse(roomResponse);
       const room = roomData.data?.room;
+      if (!room) {
+        if (roomRef.current) {
+          cleanupRoomSession();
+          onBackToLobby();
+        }
+        return;
+      }
       if (room) {
         roomRef.current = room;
         // Players mapping
@@ -84,6 +110,7 @@ export function Game({ playerName, hostChainId, settings, onGameEnd }: GameProps
           hasGuessed: !!p.hasGuessed,
         }));
         setPlayers(mappedPlayers);
+        // No additional host-missing handling; only leave when room becomes null
         // Round and timers
         setRound(room.currentRound ?? 1);
         // Word selection visibility
@@ -99,7 +126,10 @@ export function Game({ playerName, hostChainId, settings, onGameEnd }: GameProps
           setWordOptions(Array.from(set));
         }
         // Messages mapping (last 20)
-      const msgs = (room.chatMessages ?? []).slice(-20).map((m: any, idx: number) => ({
+      const msgs = (room.chatMessages ?? [])
+        .filter((m: any) => m && m.playerName && m.message)
+        .slice(-20)
+        .map((m: any, idx: number) => ({
         id: `${Date.now()}-${idx}`,
         playerId: m.playerName ?? `p-${idx}`,
         playerName: m.playerName ?? 'Player',
@@ -142,14 +172,12 @@ export function Game({ playerName, hostChainId, settings, onGameEnd }: GameProps
     };
 
     const handleNotification = (_notification: any) => {
-      // Debounced query on notifications to avoid rapid successive calls
       debouncedQuery();
     };
 
     const maybeUnsubscribe = (client as any).onNotification?.(handleNotification);
 
-    // Initial query on mount
-    queryGameState();
+    // No initial query; rely solely on subscription-triggered queries
 
     return () => {
       if (queryTimeout) {
@@ -255,8 +283,6 @@ export function Game({ playerName, hostChainId, settings, onGameEnd }: GameProps
       await application.query('{ "query": "mutation { chooseWord(word: \\\"' + word + '\\\") }" }');
       setShowWordSelector(false);
       setCurrentWord(word);
-      // Refresh local roomRef so timers start immediately without waiting for notifications
-      try { await queryGameState(); } catch {}
     } catch {}
   };
 
@@ -283,8 +309,6 @@ export function Game({ playerName, hostChainId, settings, onGameEnd }: GameProps
     chooseDrawerInFlightRef.current = true;
     try {
       await application.query('{ "query": "mutation { chooseDrawer }" }');
-      // Refresh state to align timers/stage locally
-      try { await queryGameState(); } catch {}
     } catch {}
   };
 
@@ -351,9 +375,13 @@ export function Game({ playerName, hostChainId, settings, onGameEnd }: GameProps
         round={roomRef.current?.currentRound ?? round}
         totalRounds={roomRef.current?.totalRounds ?? settings.totalRounds}
         timeLeft={timeLeft}
-        currentWord={currentWord}
-        isDrawing={isDrawing}
         hostChainId={hostChainId}
+        onLeave={async () => {
+          if (!application || !ready) return;
+          try {
+            await application.query('{ "query": "mutation { leaveRoom }" }');
+          } catch {}
+        }}
       />
 
       <div className="flex-1 flex gap-4 p-4 max-w-[1600px] mx-auto w-full">

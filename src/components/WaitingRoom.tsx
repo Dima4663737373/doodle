@@ -10,6 +10,7 @@ interface WaitingRoomProps {
   playerName: string;
   isHost: boolean;
   onStartGame: (settings: GameSettings) => void;
+  onBackToLobby: () => void;
 }
 
 export interface GameSettings {
@@ -17,7 +18,7 @@ export interface GameSettings {
   roundTime: number;
 }
 
-export function WaitingRoom({ hostChainId, playerName, isHost, onStartGame }: WaitingRoomProps) {
+export function WaitingRoom({ hostChainId, playerName, isHost, onStartGame, onBackToLobby }: WaitingRoomProps) {
   const [copied, setCopied] = useState(false);
   const [totalRounds, setTotalRounds] = useState(3);
   const [roundTime, setRoundTime] = useState(80);
@@ -43,10 +44,6 @@ export function WaitingRoom({ hostChainId, playerName, isHost, onStartGame }: Wa
     onStartGame({ totalRounds, roundTime });
   };
 
-  // Initial state load via subscription path only (no fallback polling)
-  // We trigger a debounced query once on mount and rely solely on client notifications afterwards.
-
-  // Subscribe to client notifications to refresh players in near real-time
   useEffect(() => {
     if (!client || !application || !ready) return;
 
@@ -62,13 +59,16 @@ export function WaitingRoom({ hostChainId, playerName, isHost, onStartGame }: Wa
           );
           const json = typeof res === 'string' ? JSON.parse(res) : res;
           const data = json?.data?.room;
-          if (data?.players) {
+          if (!data) {
+            return;
+          }
+          if (data.players) {
             const list = data.players.map((p: any) => ({ id: p.chainId, name: p.name, isHost: p.chainId === hostChainId }));
             const merged = list.length ? list : [{ id: "local", name: playerName, isHost: isHost }];
             setPlayers(merged);
           }
           if (
-            data?.gameState &&
+            data.gameState &&
             [
               "ChoosingDrawer",
               "WaitingForWord",
@@ -88,9 +88,6 @@ export function WaitingRoom({ hostChainId, playerName, isHost, onStartGame }: Wa
     const unsubscribe = (client as any).onNotification?.(() => {
       debouncedPoll();
     });
-
-    // Initial refresh from subscription path too
-    debouncedPoll();
 
     return () => {
       if (debounceRef.current) {

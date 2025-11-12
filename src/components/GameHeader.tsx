@@ -1,4 +1,4 @@
-import { Timer, Copy, Check } from "lucide-react";
+import { Timer, Copy, Check, LogOut } from "lucide-react";
 import { useState } from "react";
 import { Button } from "./ui/button";
 
@@ -6,24 +6,12 @@ interface GameHeaderProps {
   round: number;
   totalRounds: number;
   timeLeft: number;
-  currentWord: string;
-  isDrawing: boolean;
   hostChainId?: string;
+  onLeave: () => void;
 }
 
-export function GameHeader({ round, totalRounds, timeLeft, currentWord, isDrawing, hostChainId }: GameHeaderProps) {
+export function GameHeader({ round, totalRounds, timeLeft, hostChainId, onLeave }: GameHeaderProps) {
   const [copied, setCopied] = useState(false);
-
-  const getHiddenWord = (word: string) => {
-    if (!word) return "_ _ _ _ _ _";
-    return word.split("").map((char, i) => {
-      if (char === " ") return " ";
-      // Show some letters as hints
-      if (timeLeft < 30 && (i === 0 || i === word.length - 1)) return char;
-      if (timeLeft < 15 && i === Math.floor(word.length / 2)) return char;
-      return "_";
-    }).join(" ");
-  };
 
   const handleCopyChainId = async () => {
     if (!hostChainId) return;
@@ -67,11 +55,17 @@ export function GameHeader({ round, totalRounds, timeLeft, currentWord, isDrawin
         </div>
 
         <div className="flex items-center gap-6">
-          {currentWord && (
-            <div className="bg-white text-black px-6 py-2 rounded-lg tracking-wider">
-              {isDrawing ? currentWord : getHiddenWord(currentWord)}
-            </div>
-          )}
+          {/* Leave Room button replaces word hints UI */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onLeave}
+            className="border-white/20 hover:bg-white/10 text-white hover:text-white h-8"
+            title="Leave Room"
+          >
+            <LogOut className="w-4 h-4 mr-2" />
+            Leave Room
+          </Button>
 
           <div className="flex items-center gap-2 bg-red-500 px-4 py-2 rounded-lg">
             <Timer className="w-5 h-5" />

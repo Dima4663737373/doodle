@@ -6,7 +6,7 @@ import { createRoot } from "react-dom/client";
 
 // Dev-only: ensure WebAssembly.instantiateStreaming gracefully falls back when
 // server does not return `application/wasm` for `.wasm` assets.
-if (import.meta.env.DEV && typeof WebAssembly !== "undefined") {
+if (typeof WebAssembly !== "undefined") {
   const wasmAny = WebAssembly as any;
   const original = wasmAny.instantiateStreaming;
   if (typeof original === "function") {

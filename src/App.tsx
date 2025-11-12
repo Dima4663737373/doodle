@@ -3,6 +3,8 @@ import { Game, Player } from "./components/Game";
 import { Lobby } from "./components/Lobby";
 import { WaitingRoom, GameSettings } from "./components/WaitingRoom";
 import { GameResults } from "./components/GameResults";
+import { GlobalDebugOverlay } from "./components/GlobalDebugOverlay";
+import { useLinera } from "./components/LineraProvider";
 
 type AppState =
   | { screen: "lobby" }
@@ -12,6 +14,7 @@ type AppState =
 
 export default function App() {
   const [appState, setAppState] = useState<AppState>({ screen: "lobby" });
+  const { application, client, ready, reinitializeClient } = useLinera() as any;
 
   const handleJoinGame = (playerName: string, hostChainId: string, isHost: boolean) => {
     setAppState({
@@ -53,32 +56,45 @@ export default function App() {
     });
   };
 
-  const handleBackToLobby = () => {
+  const handleBackToLobby = async () => {
+    try { await reinitializeClient?.(); } catch {}
     setAppState({ screen: "lobby" });
   };
 
   if (appState.screen === "lobby") {
-    return <Lobby onJoinGame={handleJoinGame} />;
+    return (
+      <>
+        <Lobby onJoinGame={handleJoinGame} />
+        <GlobalDebugOverlay application={application} client={client} ready={ready} />
+      </>
+    );
   }
 
   if (appState.screen === "waiting") {
     return (
-      <WaitingRoom
-        hostChainId={appState.hostChainId}
-        playerName={appState.playerName}
-        isHost={appState.isHost}
-        onStartGame={handleStartGame}
-      />
+      <>
+        <WaitingRoom
+          hostChainId={appState.hostChainId}
+          playerName={appState.playerName}
+          isHost={appState.isHost}
+          onStartGame={handleStartGame}
+          onBackToLobby={handleBackToLobby}
+        />
+        <GlobalDebugOverlay application={application} client={client} ready={ready} />
+      </>
     );
   }
 
   if (appState.screen === "results") {
     return (
-      <GameResults
-        players={appState.players}
-        onPlayAgain={handlePlayAgain}
-        onBackToLobby={handleBackToLobby}
-      />
+      <>
+        <GameResults
+          players={appState.players}
+          onPlayAgain={handlePlayAgain}
+          onBackToLobby={handleBackToLobby}
+        />
+        <GlobalDebugOverlay application={application} client={client} ready={ready} />
+      </>
     );
   }
 
@@ -89,7 +105,9 @@ export default function App() {
         hostChainId={appState.hostChainId}
         settings={appState.settings}
         onGameEnd={handleGameEnd}
+        onBackToLobby={handleBackToLobby}
       />
+      <GlobalDebugOverlay application={application} client={client} ready={ready} />
     </div>
   );
 }
